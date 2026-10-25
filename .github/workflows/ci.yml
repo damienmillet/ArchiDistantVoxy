@@ -23,7 +23,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p lod-core
-      - run: cargo clippy -p lod-core --all-targets -- -D warnings
+      - run: cargo test -p lod-core --features sqlite
+      - run: cargo clippy -p lod-core --features sqlite --all-targets -- -D warnings
 
   plugin:
     name: archidistantvoxy (check + clippy)
@@ -34,7 +35,5 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # cargo check is enough to validate API usage against the pinned Pumpkin
-      # tag; the full cdylib link is done by the release workflow.
       - run: cargo check -p archidistantvoxy
       - run: cargo clippy -p archidistantvoxy -- -D warnings

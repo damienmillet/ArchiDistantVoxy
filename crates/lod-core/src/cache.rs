@@ -75,6 +75,24 @@ impl MemoryStore {
     }
 }
 
+impl BlobStore for Box<dyn BlobStore> {
+    fn get(&self, key: &str) -> Result<Option<Vec<u8>>, String> {
+        (**self).get(key)
+    }
+
+    fn put(&self, key: &str, blob: &[u8]) -> Result<(), String> {
+        (**self).put(key, blob)
+    }
+
+    fn remove(&self, key: &str) -> Result<(), String> {
+        (**self).remove(key)
+    }
+
+    fn len(&self) -> Result<usize, String> {
+        (**self).len()
+    }
+}
+
 impl BlobStore for MemoryStore {
     fn get(&self, key: &str) -> Result<Option<Vec<u8>>, String> {
         Ok(self.map.lock().expect("poisoned").get(key).cloned())

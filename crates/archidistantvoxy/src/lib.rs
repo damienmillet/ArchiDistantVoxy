@@ -19,7 +19,8 @@ use pumpkin::plugin::{BoxFuture, EventHandler};
 use pumpkin_api_macros::{plugin_impl, plugin_method};
 
 use lod_core::bytes::DecodeError;
-use lod_core::cache::{LodCache, MemoryStore, SectionKey};
+use lod_core::cache::{BlobStore, LodCache, MemoryStore, SectionKey};
+use lod_core::sqlite::SqliteStore;
 use lod_core::message::{self, ClientMessage};
 use lod_core::throttle::{BandwidthLimiter, ThrottlePolicy};
 use lod_core::transfer::RequestQueue;
@@ -32,6 +33,24 @@ impl ArchiDistantVoxyPlugin {
     #[plugin_method]
     fn on_load(&self, context: Arc<Context>) -> Result<(), String> {
         context.register_event(Arc::clone(&self.handler), EventPriority::Normal, false);
+        let db_path = context.get_data_folder().join("lod-cache.db");
+        match SqliteStore::open(&db_path) {
+            Ok(store) => {
+                self.handler.state.set_persistent(store);
+                tracing::info!(
+                    target: "archidistantvoxy",
+                    "persistent LOD cache at {}",
+                    db_path.display()
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "archidistantvoxy",
+                    "cannot open persistent LOD cache at {}: {e}; staying in-memory only",
+                    db_path.display()
+                );
+            }
+        }
         tracing::info!(
             target: "archidistantvoxy",
             "loaded: DH {DH_VERSION} (protocol {PROTOCOL}) support on channel '{CHANNEL}'"
@@ -91,8 +110,31 @@ impl DhSession {
 struct SharedState {
     /// Per-player sessions.
     sessions: std::sync::Mutex<HashMap<String, DhSession>>,
-    /// LOD section cache; the SQLite-backed store lands with M2.
-    cache: std::sync::Mutex<LodCache<MemoryStore>>,
+    /// LOD section cache over a swappable persistent store.
+    cache: std::sync::Mutex<SwappableCache>,
+}
+
+/// Cache wrapper whose persistent layer can be replaced at runtime (the
+/// SQLite store is opened in `on_load`, after the handler is constructed).
+struct SwappableCache {
+    /// RAM layer plus the current persistent store.
+    inner: LodCache<Box<dyn BlobStore>>,
+}
+
+impl SwappableCache {
+    fn new() -> Self {
+        Self {
+            inner: LodCache::new(Box::new(MemoryStore::new()), 1024),
+        }
+    }
+
+    fn set_persistent(&mut self, store: SqliteStore) {
+        self.inner = LodCache::new(Box::new(store), 1024);
+    }
+
+    fn get(&mut self, key: &SectionKey) -> Option<Vec<u8>> {
+        self.inner.get(key).ok().flatten()
+    }
 }
 
 impl SharedState {
@@ -100,8 +142,15 @@ impl SharedState {
     fn new() -> Self {
         Self {
             sessions: std::sync::Mutex::new(HashMap::new()),
-            cache: std::sync::Mutex::new(LodCache::new(MemoryStore::new(), 1024)),
+            cache: std::sync::Mutex::new(SwappableCache::new()),
         }
+    }
+
+    fn set_persistent(&self, store: SqliteStore) {
+        self.cache
+            .lock()
+            .expect("cache lock poisoned")
+            .set_persistent(store);
     }
 
     /// Processes one inbound payload, returning the messages to send back.
@@ -153,7 +202,11 @@ impl SharedState {
                     x: section.x,
                     z: section.z,
                 };
-                let cached = self.cache.lock().ok()?.get(&key).ok().flatten();
+                let cached = self
+                    .cache
+                    .lock()
+                    .ok()?
+                    .get(&key);
                 if let Some(lod) = cached {
                         let mut sessions = self.sessions.lock().ok()?;
                         let session = sessions

@@ -9,7 +9,16 @@ authors.workspace = true
 [dependencies]
 bytes = "1"
 
+[features]
+sqlite = ["dep:rusqlite"]
+
+[dependencies.rusqlite]
+version = "0.32"
+features = ["bundled"]
+optional = true
+
 [dev-dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [lints]
 workspace = true

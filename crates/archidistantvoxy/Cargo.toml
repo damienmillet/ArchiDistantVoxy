@@ -11,7 +11,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-lod-core = { path = "../lod-core" }
+lod-core = { path = "../lod-core", features = ["sqlite"] }
 # The #[plugin_impl] macro emits `pumpkin::plugin::*` paths, so the
 # pumpkin-core dependency must be renamed to `pumpkin`.
 pumpkin = { package = "pumpkin-core", git = "https://github.com/Pumpkin-MC/Pumpkin", tag = "0.2.1+26.3-26.51" }

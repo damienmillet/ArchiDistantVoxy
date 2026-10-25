@@ -11,8 +11,8 @@ The full specification (scope, requirements, architecture, milestones, acceptanc
 
 | Crate | Description |
 |---|---|
-| `crates/lod-core` | Pure-Rust DH protocol 16 codec, LOD section (DTO) builder and bandwidth throttling. Fully unit-tested, no Pumpkin dependency. |
-| `crates/archidistantvoxy` | Native Pumpkin plugin (`.so`/`.dll`/`.dylib`): handshake, session handling, custom-payload dispatch on `distant_horizons:msg`. |
+| `crates/lod-core` | Pure-Rust DH protocol 16 codec, LOD section (DTO) builder, two-level LOD cache (RAM LRU + persistent `BlobStore`, SQLite via the `sqlite` feature), transfer queue and bandwidth throttling. Fully unit-tested, no Pumpkin dependency. |
+| `crates/archidistantvoxy` | Native Pumpkin plugin (`.so`/`.dll`/`.dylib`): handshake, session handling, custom-payload dispatch on `distant_horizons:msg`, per-player throttled transfers, persistent LOD cache at `plugins/data/archidistantvoxy/lod-cache.db`. |
 
 ## Pinned Pumpkin version
 
@@ -33,8 +33,9 @@ Notes:
 
 ## Status
 
-- **M0 (spike)**: handshake messages (init/config/level-init/session-config/reject/close) implemented and round-trip tested in `lod-core`; plugin wires `PlayerCustomPayloadEvent` to the DH channel.
-- **Next (M1)**: cache (SQLite), LodBuilder pipeline from `pumpkin-world` terrain, throttled transfer of LOD sections (`transfer_fragment`/`transfer_response` encoders are ready in `lod-core`).
+- **M0 (spike)**: done — handshake messages (init/config/level-init/session-config/reject/close) round-trip tested in `lod-core`; plugin wires `PlayerCustomPayloadEvent` to the DH channel.
+- **M1 (MVP)**: done — persistent SQLite LOD cache (survives restarts, per-dimension), two-level RAM LRU cache, per-player throttled fragmented transfers, cancel support, update-only requests answered by timestamp comparison, clean refusal of unsupported protocols. LOD requests are served from cache; misses are rejected with a typed message until M2 wires terrain generation.
+- **Next (M2)**: on-demand distant generation via `pumpkin-world` (async, CPU budget), `/lod pregen`.
 
 ## License
 

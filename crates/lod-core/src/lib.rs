@@ -14,6 +14,10 @@ pub mod message;
 pub mod throttle;
 pub mod transfer;
 
+/// SQLite-backed persistent blob store (feature `sqlite`).
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
+
 /// Distant Horizons client release this implementation targets.
 pub const DH_VERSION: &str = "3.3.4";
 /// Network protocol used by the supported Distant Horizons release.
