@@ -51,6 +51,25 @@ jobs:
           path: artifacts/
           if-no-files-found: error
 
+  build-linux-arm:
+    name: Build libarchidistantvoxy.so (linux arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release cdylib
+        run: cargo build -p archidistantvoxy --release
+      - name: Collect artifact
+        run: |
+          mkdir -p artifacts
+          cp target/release/libarchidistantvoxy.so artifacts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archidistantvoxy-linux-arm64
+          path: artifacts/
+          if-no-files-found: error
+
   build-macos-arm:
     name: Build libarchidistantvoxy.dylib (macos arm64)
     runs-on: macos-15
