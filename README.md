@@ -22,7 +22,7 @@ The full specification (scope, requirements, architecture, milestones, acceptanc
 
 The release workflow (`.github/workflows/release.yml`) builds the plugin on every push to `main` and uploads the artifacts:
 
-1. **Get the plugin binary** — on GitHub, *Actions → Release artifacts → latest successful run → Artifacts*: `archidistantvoxy-linux` (contains `libarchidistantvoxy.so`) or `archidistantvoxy-windows` (`archidistantvoxy.dll`).
+1. **Get the plugin binary** — on GitHub, *Actions → Release artifacts → latest successful run → Artifacts*: `archidistantvoxy-linux-x86_64` (`libarchidistantvoxy.so`), `archidistantvoxy-windows-x86_64` (`archidistantvoxy.dll`) or `archidistantvoxy-macos-arm64` (`libarchidistantvoxy.dylib`, Apple Silicon M1–M5).
 2. **Get Pumpkin** `0.2.1+26.3-26.51` (from [Pumpkin's releases](https://github.com/Pumpkin-MC/Pumpkin/releases), tag matching the pin) and run it once so the configs are generated, then stop it.
 3. **Install the plugin**: drop the `.so`/`.dll` into the server's `plugins/` folder. Native plugins load by extension; the plugins system is enabled by default (`[plugins] enabled = true` in the advanced configuration). On Windows the DLL cannot be hot-unloaded, prefer a clean stop/start.
 4. **Client setup**: vanilla Minecraft (26.3–26.51 supported by the pin) + **Distant Horizons 3.3.4** only. DH is the only tested path; Voxy answers its handshake but gets `NOT_GENERATED` for now.

@@ -14,7 +14,7 @@ env:
 
 jobs:
   build-linux:
-    name: Build libarchidistantvoxy.so (linux)
+    name: Build libarchidistantvoxy.so (linux x86_64)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,18 +22,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build release cdylib
         run: cargo build -p archidistantvoxy --release
-      - name: Rename artifact
+      - name: Collect artifact
         run: |
           mkdir -p artifacts
           cp target/release/libarchidistantvoxy.so artifacts/
       - uses: actions/upload-artifact@v4
         with:
-          name: archidistantvoxy-linux
+          name: archidistantvoxy-linux-x86_64
           path: artifacts/
           if-no-files-found: error
 
   build-windows:
-    name: Build archidistantvoxy.dll (windows)
+    name: Build archidistantvoxy.dll (windows x86_64)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,12 +41,33 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build release cdylib
         run: cargo build -p archidistantvoxy --release
-      - name: Rename artifact
+      - name: Collect artifact
         run: |
           mkdir artifacts
           copy target\release\archidistantvoxy.dll artifacts\
       - uses: actions/upload-artifact@v4
         with:
-          name: archidistantvoxy-windows
+          name: archidistantvoxy-windows-x86_64
+          path: artifacts/
+          if-no-files-found: error
+
+  build-macos-arm:
+    name: Build libarchidistantvoxy.dylib (macos arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release cdylib for Apple Silicon
+        run: cargo build -p archidistantvoxy --release --target aarch64-apple-darwin
+      - name: Collect artifact
+        run: |
+          mkdir -p artifacts
+          cp target/aarch64-apple-darwin/release/libarchidistantvoxy.dylib artifacts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archidistantvoxy-macos-arm64
           path: artifacts/
           if-no-files-found: error
