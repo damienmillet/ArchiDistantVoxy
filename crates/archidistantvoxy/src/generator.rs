@@ -199,7 +199,7 @@ pub fn generate_section(
     ];
 
     let min_y = world.dimension.min_y;
-    let height = world.dimension.height as i32;
+    let height = world.dimension.height;
     let terrain = ChunkedTerrain::new(protos, min_y, height);
     let region = TerrainRegion {
         width: lod_core::SECTION_SIZE_BLOCKS as usize,
