@@ -18,6 +18,20 @@ The full specification (scope, requirements, architecture, milestones, acceptanc
 
 `0.2.1+26.3-26.51` (see `crates/archidistantvoxy/Cargo.toml`). Pumpkin has no stable API yet; every release of this project is built and validated against this exact tag (ENF-4).
 
+## Testing (receiving real LODs on a DH client)
+
+The release workflow (`.github/workflows/release.yml`) builds the plugin on every push to `main` and uploads the artifacts:
+
+1. **Get the plugin binary** — on GitHub, *Actions → Release artifacts → latest successful run → Artifacts*: `archidistantvoxy-linux` (contains `libarchidistantvoxy.so`) or `archidistantvoxy-windows` (`archidistantvoxy.dll`).
+2. **Get Pumpkin** `0.2.1+26.3-26.51` (from [Pumpkin's releases](https://github.com/Pumpkin-MC/Pumpkin/releases), tag matching the pin) and run it once so the configs are generated, then stop it.
+3. **Install the plugin**: drop the `.so`/`.dll` into the server's `plugins/` folder. Native plugins load by extension; the plugins system is enabled by default (`[plugins] enabled = true` in the advanced configuration). On Windows the DLL cannot be hot-unloaded, prefer a clean stop/start.
+4. **Client setup**: vanilla Minecraft (26.3–26.51 supported by the pin) + **Distant Horizons 3.3.4** only. DH is the only tested path; Voxy answers its handshake but gets `NOT_GENERATED` for now.
+5. **Join the server** and look at the horizon: DH should display distant terrain you never explored, filled progressively under the per-player throttle (defaults 500 KB/s for 2 minutes, then 200 KB/s).
+6. **Check the logs**: `archidistantvoxy` target lines show the session init, config, requests and generations; `/lod status` in-game reports the cache hit-rate and queues; `/lod pregen 64` pre-fills around spawn.
+7. **Restart the server** and confirm in the log that sections come from the persistent cache (`plugins/data/archidistantvoxy/lod-cache.db`) without regeneration.
+
+Known first-run caveats: a section's first request pays the generation cost (~seconds per 64×64 section, off the tick); terrain divergence from vanilla rendering is expected to be minor but is exactly what this recette validates (spec acceptance criterion 3).
+
 ## Building
 
 ```bash

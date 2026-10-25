@@ -1,0 +1,52 @@
+name: Release artifacts
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # pumpkin-data is a ~88 MB generated crate: reduce rustc memory.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_DEV_INCREMENTAL: false
+  CARGO_NET_RETRY: 3
+
+jobs:
+  build-linux:
+    name: Build libarchidistantvoxy.so (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release cdylib
+        run: cargo build -p archidistantvoxy --release
+      - name: Rename artifact
+        run: |
+          mkdir -p artifacts
+          cp target/release/libarchidistantvoxy.so artifacts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archidistantvoxy-linux
+          path: artifacts/
+          if-no-files-found: error
+
+  build-windows:
+    name: Build archidistantvoxy.dll (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release cdylib
+        run: cargo build -p archidistantvoxy --release
+      - name: Rename artifact
+        run: |
+          mkdir artifacts
+          copy target\release\archidistantvoxy.dll artifacts\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archidistantvoxy-windows
+          path: artifacts/
+          if-no-files-found: error
