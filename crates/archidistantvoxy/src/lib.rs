@@ -21,10 +21,25 @@ use lod_core::throttle::{BandwidthLimiter, ThrottlePolicy};
 use lod_core::transfer::RequestQueue;
 use lod_core::{CHANNEL, DH_VERSION, PROTOCOL};
 
+impl ArchiDistantVoxyPlugin {
+    /// Plugin load hook; collected by `#[plugin_impl]` into the generated
+    /// `Plugin` trait implementation. Must be expanded before the struct.
+    #[allow(clippy::unnecessary_wraps)]
+    #[plugin_method]
+    fn on_load(&self, context: Arc<Context>) -> Result<(), String> {
+        context.register_event(Arc::clone(&self.handler), EventPriority::Normal, false);
+        tracing::info!(
+            target: "archidistantvoxy",
+            "loaded: DH {DH_VERSION} (protocol {PROTOCOL}) support on channel '{CHANNEL}'"
+        );
+        Ok(())
+    }
+}
+
 /// The plugin entrypoint.
 ///
 /// The `#[plugin_impl]` macro generates the `Plugin` trait implementation from
-/// the methods annotated with `#[plugin_method]` below.
+/// the `#[plugin_method]` functions defined in the impl block above.
 #[plugin_impl]
 pub struct ArchiDistantVoxyPlugin {
     /// Registered event handler for DH custom payloads.
@@ -46,22 +61,6 @@ impl ArchiDistantVoxyPlugin {
 impl Default for ArchiDistantVoxyPlugin {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl ArchiDistantVoxyPlugin {
-    /// Called by the generated `Plugin::on_load`.
-    // The generated trait impl requires this signature (Result return, Arc
-    // receiver), which trips unnecessary_wraps and needless_pass_by_value.
-    #[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
-    #[plugin_method]
-    fn on_load(self: &Arc<Self>, context: &Arc<Context>) -> Result<(), String> {
-        context.register_event(Arc::clone(&self.handler), EventPriority::Normal, false);
-        tracing::info!(
-            target: "archidistantvoxy",
-            "loaded: DH {DH_VERSION} (protocol {PROTOCOL}) support on channel '{CHANNEL}'"
-        );
-        Ok(())
     }
 }
 
