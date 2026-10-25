@@ -9,13 +9,12 @@
 
 use std::sync::Arc;
 
-use pumpkin::command::argument_builder::{argument, literal, ArgumentBuilder};
+use pumpkin::command::argument_builder::{argument, command, literal, ArgumentBuilder};
 use pumpkin::command::argument_types::core::integer::IntegerArgumentType;
 use pumpkin::command::argument_types::core::string::StringArgumentType;
 use pumpkin::command::context::command_context::CommandContext;
+use pumpkin::command::node::{CommandExecutor, CommandExecutorResult};
 use pumpkin::command::CommandSource;
-use pumpkin::command::node::CommandExecutor;
-use pumpkin::command::node::CommandExecutorResult;
 use pumpkin::plugin::api::context::Context;
 use pumpkin_util::text::TextComponent;
 
@@ -24,43 +23,50 @@ use crate::{SharedState, DH_VERSION, PROTOCOL};
 /// Maximum `/lod pregen` radius in chunks, to keep the prefill bounded (EF-6).
 pub const MAX_PREGEN_RADIUS: i32 = 1024;
 
-/// Registers all `/lod` subcommands with their permissions (EF-10).
+/// Registers the `/lod` command tree (EF-10).
+///
+/// Pumpkin registers one permission per root command, so every `/lod`
+/// subcommand is gated by `lod.admin`; the finer `lod.pregen` node of the
+/// spec is covered by granting or withholding `archidistantvoxy:lod.admin`.
 pub(crate) fn register(state: &Arc<SharedState>, context: &Arc<Context>) {
-    context.register_command(
-        literal("lod").then(literal("status").executes(StatusExecutor {
-            state: Arc::clone(state),
-        })),
-        "lod.admin",
-    );
-
-    context.register_command(
-        literal("lod").then(literal("pregen").then(
-            argument("radius", IntegerArgumentType::new(1, MAX_PREGEN_RADIUS)).executes(
-                PregenExecutor {
+    let lod = command("lod", "ArchiDistantVoxy LOD streaming administration")
+        .then(
+            literal("status")
+                .executes(StatusExecutor {
                     state: Arc::clone(state),
-                },
-            ),
-        )),
-        "lod.pregen",
-    );
+                })
+                .build(),
+        )
+        .then(
+            literal("pregen")
+                .then(
+                    argument("radius", IntegerArgumentType::new(1, MAX_PREGEN_RADIUS)).executes(
+                        PregenExecutor {
+                            state: Arc::clone(state),
+                        },
+                    ),
+                )
+                .build(),
+        )
+        .then(
+            literal("resend")
+                .then(
+                    argument("player", StringArgumentType::SingleWord).executes(ResendExecutor {
+                        state: Arc::clone(state),
+                    }),
+                )
+                .build(),
+        )
+        .then(
+            literal("purge-cache")
+                .executes(PurgeCacheExecutor {
+                    state: Arc::clone(state),
+                })
+                .build(),
+        )
+        .build();
 
-    context.register_command(
-        literal("lod").then(literal("resend").then(
-            argument("player", StringArgumentType::SingleWord).executes(ResendExecutor {
-                state: Arc::clone(state),
-            }),
-        )),
-        "lod.admin",
-    );
-
-    context.register_command(
-        literal("lod").then(
-            literal("purge-cache").executes(PurgeCacheExecutor {
-                state: Arc::clone(state),
-            }),
-        ),
-        "lod.admin",
-    );
+    context.register_command(lod, "lod.admin");
 }
 
 /// `/lod status`: reports cache, queues and bandwidth (EF-8).
@@ -72,7 +78,7 @@ impl CommandExecutor for StatusExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let report = self.state.status_report();
         context.source.send_message(TextComponent::text(report));
-        Ok(())
+        Ok(1)
     }
 }
 
@@ -83,18 +89,18 @@ struct PregenExecutor {
 
 impl CommandExecutor for PregenExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let radius = IntegerArgumentType::get(context, "radius")?;
+        let radius = IntegerArgumentType::get::<CommandSource>(context, "radius")?;
         if radius <= 0 || radius > MAX_PREGEN_RADIUS {
             context.source.send_message(TextComponent::text(format!(
                 "radius must be between 1 and {MAX_PREGEN_RADIUS} chunks"
             )));
-            return Ok(());
+            return Ok(0);
         }
         let sections = self.state.pregen_spawn(radius);
         context.source.send_message(TextComponent::text(format!(
             "pregen queued {sections} LOD sections around spawn (radius {radius} chunks)"
         )));
-        Ok(())
+        Ok(1)
     }
 }
 
@@ -116,13 +122,13 @@ impl CommandExecutor for ResendExecutor {
             context
                 .source
                 .send_message(TextComponent::text(format!("{player_name} is not online")));
-            return Ok(());
+            return Ok(0);
         }
         context.source.send_message(TextComponent::text(format!(
             "resend requested for {player_name}: cached sections will be re-pushed on their next requests"
         )));
         self.state.mark_resend(&player_name);
-        Ok(())
+        Ok(1)
     }
 }
 
@@ -141,7 +147,7 @@ impl CommandExecutor for PurgeCacheExecutor {
                 .source
                 .send_message(TextComponent::text(format!("purge failed: {e}"))),
         }
-        Ok(())
+        Ok(1)
     }
 }
 

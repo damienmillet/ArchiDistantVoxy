@@ -348,6 +348,14 @@ impl SharedState {
                 ..
             } => {
                 tracing::info!(target: "archidistantvoxy", "DH LOD request from {player} for {level} section ({}, {}) tracker {tracker}", section.x, section.z);
+                if self.take_resend(player) {
+                    tracing::info!(target: "archidistantvoxy", "resend requested: cancelling in-flight transfers for {player}");
+                    if let Ok(mut sessions) = self.sessions.lock() {
+                        if let Some(session) = sessions.get_mut(player) {
+                            session.queue = RequestQueue::new();
+                        }
+                    }
+                }
                 let key = SectionKey {
                     dimension: level,
                     x: section.x,
