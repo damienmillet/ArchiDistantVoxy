@@ -1,4 +1,4 @@
-# pumpkin-lod
+# ArchiDistantVoxy
 
 Server → client LOD (Level Of Detail) streaming plugin for the [Pumpkin](https://github.com/Pumpkin-MC/Pumpkin) Minecraft server (Rust).
 

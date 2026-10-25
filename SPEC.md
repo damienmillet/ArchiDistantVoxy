@@ -1,4 +1,4 @@
-# pumpkin-lod — Specification (Cahier des charges)
+# ArchiDistantVoxy — Specification (Cahier des charges)
 
 **Project**: Server → client LOD (Level Of Detail) streaming plugin for the **Pumpkin** Minecraft server (Rust).
 **Phase 1 target**: **Distant Horizons 3.3.x** clients (network protocol no. 16).
@@ -99,7 +99,7 @@ flowchart TD
   end
   subgraph Pumpkin["Pumpkin server (Rust)"]
     NET["pumpkin-protocol (custom payload)"]
-    subgraph Plugin["Native pumpkin-lod plugin"]
+    subgraph Plugin["Native ArchiDistantVoxy plugin"]
       HS["Handshake / protocol negotiation"]
       REQ["LOD request queue (per-player throttle)"]
       GEN["Terrain generator (pumpkin-world, async, seed-deterministic)"]
