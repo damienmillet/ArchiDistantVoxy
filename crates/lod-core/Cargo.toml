@@ -1,0 +1,15 @@
+[package]
+name = "lod-core"
+description = "Distant Horizons LOD protocol (v16) codec, section builder and throttling for ArchiDistantVoxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+bytes = "1"
+
+[dev-dependencies]
+
+[lints]
+workspace = true

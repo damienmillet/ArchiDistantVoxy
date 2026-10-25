@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["crates/lod-core", "crates/archidistantvoxy"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["damienmillet"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+[profile.dev]
+debug = false
+incremental = false
+
+[profile.release]
+lto = true
+codegen-units = 1

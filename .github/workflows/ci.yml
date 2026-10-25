@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Reduce rustc memory usage: pumpkin-data is a very large generated crate.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_DEV_INCREMENTAL: false
+  CARGO_NET_RETRY: 3
+
+jobs:
+  lod-core:
+    name: lod-core (test + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p lod-core
+      - run: cargo clippy -p lod-core --all-targets -- -D warnings
+
+  plugin:
+    name: archidistantvoxy (check + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # cargo check is enough to validate API usage against the pinned Pumpkin
+      # tag; the full cdylib link is done by the release workflow.
+      - run: cargo check -p archidistantvoxy
+      - run: cargo clippy -p archidistantvoxy -- -D warnings

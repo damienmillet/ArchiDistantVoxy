@@ -1,0 +1,23 @@
+[package]
+name = "archidistantvoxy"
+description = "Native Pumpkin plugin streaming server-generated LODs to Distant Horizons clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lod-core = { path = "../lod-core" }
+# The #[plugin_impl] macro emits `pumpkin::plugin::*` paths, so the
+# pumpkin-core dependency must be renamed to `pumpkin`.
+pumpkin = { package = "pumpkin-core", git = "https://github.com/Pumpkin-MC/Pumpkin", tag = "0.2.1+26.3-26.51" }
+pumpkin-api-macros = { git = "https://github.com/Pumpkin-MC/Pumpkin", tag = "0.2.1+26.3-26.51" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tracing = "0.1"
+
+[lints]
+workspace = true
