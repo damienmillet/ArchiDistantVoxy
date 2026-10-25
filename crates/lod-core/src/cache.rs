@@ -59,6 +59,12 @@ pub trait BlobStore: Send + Sync {
     fn is_empty(&self) -> Result<bool, String> {
         Ok(self.len()? == 0)
     }
+
+    /// Removes every stored blob.
+    ///
+    /// # Errors
+    /// Returns the store's error type on storage failure.
+    fn clear(&self) -> Result<(), String>;
 }
 
 /// In-memory [`BlobStore`] used for tests and as the RAM layer.
@@ -91,6 +97,10 @@ impl BlobStore for Box<dyn BlobStore> {
     fn len(&self) -> Result<usize, String> {
         (**self).len()
     }
+
+    fn clear(&self) -> Result<(), String> {
+        (**self).clear()
+    }
 }
 
 impl BlobStore for MemoryStore {
@@ -113,6 +123,11 @@ impl BlobStore for MemoryStore {
 
     fn len(&self) -> Result<usize, String> {
         Ok(self.map.lock().expect("poisoned").len())
+    }
+
+    fn clear(&self) -> Result<(), String> {
+        self.map.lock().expect("poisoned").clear();
+        Ok(())
     }
 }
 
@@ -221,6 +236,16 @@ impl<P: BlobStore> LodCache<P> {
     /// Fails when the persistent store fails.
     pub fn persistent_len(&self) -> Result<usize, String> {
         self.persistent.len()
+    }
+
+    /// Clears the RAM layer and every persistent blob.
+    ///
+    /// # Errors
+    /// Fails when the persistent store fails.
+    pub fn clear(&mut self) -> Result<(), String> {
+        self.ram.clear();
+        self.ram_bytes = 0;
+        self.persistent.clear()
     }
 
     /// Current RAM layer size in bytes.
@@ -343,6 +368,18 @@ mod tests {
         cache.put(&nether, vec![2]).unwrap();
         assert_eq!(cache.get(&key(0, 0)), Ok(Some(vec![1])));
         assert_eq!(cache.get(&nether), Ok(Some(vec![2])));
+    }
+
+    #[test]
+    fn clear_empties_both_layers() {
+        let mut cache = LodCache::new(MemoryStore::new(), 10);
+        cache.put(&key(0, 0), vec![1]).unwrap();
+        cache.put(&key(1, 0), vec![2]).unwrap();
+        cache.clear().unwrap();
+        assert_eq!(cache.get(&key(0, 0)), Ok(None));
+        assert_eq!(cache.get(&key(1, 0)), Ok(None));
+        assert_eq!(cache.ram_bytes(), 0);
+        assert_eq!(cache.persistent_len(), Ok(0));
     }
 
     #[test]

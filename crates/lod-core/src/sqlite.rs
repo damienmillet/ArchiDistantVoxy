@@ -92,6 +92,14 @@ impl BlobStore for SqliteStore {
             .map(|n| n as usize)
             .map_err(|e| e.to_string())
     }
+
+    fn clear(&self) -> Result<(), String> {
+        let connection = self.connection.lock().map_err(|e| e.to_string())?;
+        connection
+            .execute("DELETE FROM lod_sections", [])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]
