@@ -8,9 +8,11 @@
 //! GPL-3.0-or-later.
 
 pub mod bytes;
+pub mod cache;
 pub mod builder;
 pub mod message;
 pub mod throttle;
+pub mod transfer;
 
 /// Distant Horizons client release this implementation targets.
 pub const DH_VERSION: &str = "3.3.4";
