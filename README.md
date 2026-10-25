@@ -37,7 +37,8 @@ Notes:
 - **M1 (MVP)**: done — persistent SQLite LOD cache (survives restarts, per-dimension), two-level RAM LRU cache, per-player throttled fragmented transfers, cancel support, update-only requests answered by timestamp comparison, clean refusal of unsupported protocols. LOD requests are served from cache; misses are rejected with a typed message until M2 wires terrain generation.
 - **M2 (on-demand generation)**: in progress — `lod-core` gained the incremental terrain capture (column/segment builder with sample budgets, port of the pumpkin-plugins capture); the plugin generates distant sections on cache miss via `pumpkin-world`'s `generate_single_chunk` (Features stage, outside the loaded area, deterministic from the seed), samples block states, biomes and surface heightmaps into DH materials, and serves the result through the throttled transfer queue. Generation runs on the Tokio blocking pool (ENF-2).
 - **M3 (operations)**: in progress — `/lod status` (cache size, RAM usage, hit-rate, sessions, queued transfers, pending generations — EF-8), `/lod pregen <radius>` (bounded to 1024 chunks, spawn-centered, skips cached sections — EF-6), `/lod resend <player>` (resend flag consumed on the next requests), `/lod purge-cache` (wipes both cache layers via the new BlobStore::clear), permissions `lod.admin` / `lod.pregen` (EF-10).
-- **Next**: invalidation policy (EF-7), TOML config, generation thread budget.
+- **M3 invalidation & config**: done — block place/break events invalidate the covering LOD section per a configurable policy (`immediate`/`periodic`/`disabled`, EF-7); TOML config at `plugins/data/archidistantvoxy/config.toml` (bandwidth budgets, login-sync duration, generation threads and sample budget, invalidation policy — EF-5/ENF-2/EF-7), parsed with serde and falling back to defaults.
+- **Next**: periodic flush task for the `periodic` invalidation policy, release build artifacts.
 
 ## License
 

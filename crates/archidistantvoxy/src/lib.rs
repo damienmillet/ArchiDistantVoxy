@@ -24,7 +24,9 @@ use lod_core::sqlite::SqliteStore;
 use lod_core::message::{self, ClientMessage, Section};
 use lod_core::throttle::{BandwidthLimiter, ThrottlePolicy};
 pub mod commands;
+pub mod config;
 pub mod generator;
+pub mod invalidation;
 
 use lod_core::transfer::RequestQueue;
 use lod_core::{CHANNEL, DH_VERSION, PROTOCOL};
@@ -36,7 +38,17 @@ impl ArchiDistantVoxyPlugin {
     #[plugin_method]
     fn on_load(&self, context: Arc<Context>) -> Result<(), String> {
         context.register_event(Arc::clone(&self.handler), EventPriority::Normal, false);
+        let config_path = context.get_data_folder().join("config.toml");
+        let (config, warning) = config::Config::load(&config_path);
+        if let Some(warning) = warning {
+            tracing::warn!(target: "archidistantvoxy", "{warning}");
+        }
         commands::register(&self.handler.state, &context);
+        invalidation::register(
+            &self.handler.state,
+            &context,
+            config.invalidation_policy(),
+        );
         let db_path = context.get_data_folder().join("lod-cache.db");
         match SqliteStore::open(&db_path) {
             Ok(store) => {
@@ -263,6 +275,15 @@ impl SharedState {
         if let Some(session) = sessions.get_mut(player) {
             session.resend_all = true;
         }
+    }
+
+    /// Invalidates one cached section (EF-7).
+    fn invalidate(&self, key: &SectionKey) -> Result<(), String> {
+        self.cache
+            .lock()
+            .expect("cache lock poisoned")
+            .inner
+            .invalidate(key)
     }
 
     /// Consumes the resend flag: when set, in-flight transfers were cancelled
