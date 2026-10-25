@@ -3,6 +3,10 @@
 //!
 //! SPDX-License-Identifier: GPL-3.0-or-later
 #![allow(clippy::cast_possible_truncation)]
+// The #[plugin_method] macro (pumpkin-api-macros) wraps plugin methods in
+// GLOBAL_RUNTIME.block_on(async move { ... }) without awaiting the inner
+// future, tripping clippy::async_yields_async in the generated code.
+#![allow(clippy::async_yields_async)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
