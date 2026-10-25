@@ -18,6 +18,7 @@ use pumpkin::server::Server;
 use pumpkin::world::World;
 use pumpkin_world::chunk_system::generation::generate_single_chunk;
 use pumpkin_world::chunk_system::{Chunk, StagedChunkEnum};
+use pumpkin_world::world::WorldPortalExt;
 use pumpkin_world::generation::proto_chunk::ProtoChunk;
 use lod_core::builder::{encode_section, CapturedSection};
 use lod_core::capture::{
@@ -153,10 +154,14 @@ pub fn generate_section(
     let _ = server;
     let level = &world.level;
     let generator = level.world_gen.load_full();
-    let Some(portal) = level.world_portal.load_full() else {
-        return Err(GenerationError::Unavailable(
-            "world portal not set".to_string(),
-        ));
+    let portal = level.world_portal.load_full();
+    let portal: Arc<dyn WorldPortalExt> = match &*portal {
+        Some(portal) => Arc::clone(portal),
+        None => {
+            return Err(GenerationError::Unavailable(
+                "world portal not set".to_string(),
+            ));
+        }
     };
 
     let section_blocks = lod_core::SECTION_SIZE_BLOCKS as i32;
@@ -173,7 +178,7 @@ pub fn generate_section(
     for (cx, cz) in coords {
         match generate_single_chunk(
             &generator,
-            portal.as_ref().as_ref(),
+            portal.as_ref(),
             cx,
             cz,
             StagedChunkEnum::Features,
