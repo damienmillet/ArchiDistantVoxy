@@ -35,7 +35,8 @@ Notes:
 
 - **M0 (spike)**: done — handshake messages (init/config/level-init/session-config/reject/close) round-trip tested in `lod-core`; plugin wires `PlayerCustomPayloadEvent` to the DH channel.
 - **M1 (MVP)**: done — persistent SQLite LOD cache (survives restarts, per-dimension), two-level RAM LRU cache, per-player throttled fragmented transfers, cancel support, update-only requests answered by timestamp comparison, clean refusal of unsupported protocols. LOD requests are served from cache; misses are rejected with a typed message until M2 wires terrain generation.
-- **Next (M2)**: on-demand distant generation via `pumpkin-world` (async, CPU budget), `/lod pregen`.
+- **M2 (on-demand generation)**: in progress — `lod-core` gained the incremental terrain capture (column/segment builder with sample budgets, port of the pumpkin-plugins capture); the plugin generates distant sections on cache miss via `pumpkin-world`'s `generate_single_chunk` (Features stage, outside the loaded area, deterministic from the seed), samples block states, biomes and surface heightmaps into DH materials, and serves the result through the throttled transfer queue. Generation runs on the Tokio blocking pool (ENF-2).
+- **Next**: `/lod pregen` bounded prefill, generation thread budget, invalidation policy (EF-7), `/lod status` (EF-8).
 
 ## License
 

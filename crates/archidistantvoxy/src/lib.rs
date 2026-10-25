@@ -21,15 +21,17 @@ use pumpkin_api_macros::{plugin_impl, plugin_method};
 use lod_core::bytes::DecodeError;
 use lod_core::cache::{BlobStore, LodCache, MemoryStore, SectionKey};
 use lod_core::sqlite::SqliteStore;
-use lod_core::message::{self, ClientMessage};
+use lod_core::message::{self, ClientMessage, Section};
 use lod_core::throttle::{BandwidthLimiter, ThrottlePolicy};
+pub mod generator;
+
 use lod_core::transfer::RequestQueue;
 use lod_core::{CHANNEL, DH_VERSION, PROTOCOL};
 
 impl ArchiDistantVoxyPlugin {
     /// Plugin load hook; collected by `#[plugin_impl]` into the generated
     /// `Plugin` trait implementation. Must be expanded before the struct.
-    #[allow(clippy::unnecessary_wraps)]
+    #[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
     #[plugin_method]
     fn on_load(&self, context: Arc<Context>) -> Result<(), String> {
         context.register_event(Arc::clone(&self.handler), EventPriority::Normal, false);
@@ -106,12 +108,24 @@ impl DhSession {
     }
 }
 
+/// A cache miss waiting for off-tick generation.
+struct PendingGeneration {
+    /// Cache key of the requested section.
+    key: SectionKey,
+    /// Client tracker id for the originating request.
+    tracker: i32,
+    /// The requested section coordinates.
+    section: Section,
+}
+
 /// Shared plugin state handed to the event handler.
 struct SharedState {
     /// Per-player sessions.
     sessions: std::sync::Mutex<HashMap<String, DhSession>>,
     /// LOD section cache over a swappable persistent store.
     cache: std::sync::Mutex<SwappableCache>,
+    /// Per-player queue of sections waiting for generation.
+    pending: std::sync::Mutex<HashMap<String, Vec<PendingGeneration>>>,
 }
 
 /// Cache wrapper whose persistent layer can be replaced at runtime (the
@@ -143,7 +157,47 @@ impl SharedState {
         Self {
             sessions: std::sync::Mutex::new(HashMap::new()),
             cache: std::sync::Mutex::new(SwappableCache::new()),
+            pending: std::sync::Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Pops the next pending generation for `player`, if any.
+    fn pending_generation(&self, player: &str) -> Option<(SectionKey, i32, Section)> {
+        let mut pending = self.pending.lock().expect("pending lock poisoned");
+        let queue = pending.get_mut(player)?;
+        let next = queue.pop()?;
+        if queue.is_empty() {
+            pending.remove(player);
+        }
+        Some((next.key, next.tracker, next.section))
+    }
+
+    /// Stores a freshly generated LOD section in the cache.
+    fn store_generated(&self, key: &SectionKey, lod: Vec<u8>) {
+        if let Err(e) = self
+            .cache
+            .lock()
+            .expect("cache lock poisoned")
+            .inner
+            .put(key, lod)
+        {
+            tracing::warn!(target: "archidistantvoxy", "cannot store generated LOD: {e}");
+        }
+    }
+
+    /// Serves a generated LOD to its requesting player: enqueues the transfer
+    /// and pumps as many fragments as their bandwidth allows, returning the
+    /// messages to send.
+    fn enqueue_and_pump(&self, name: &str, tracker: i32, lod: Vec<u8>) -> Vec<Vec<u8>> {
+        let mut sessions = self.sessions.lock().expect("sessions lock poisoned");
+        let session = sessions
+            .entry(name.to_string())
+            .or_insert_with(DhSession::new);
+        session
+            .queue
+            .push(lod_core::transfer::Transfer::new(tracker, tracker, lod));
+        let now = std::time::Instant::now();
+        session.queue.pump_all(&mut session.limiter, now)
     }
 
     fn set_persistent(&self, store: SqliteStore) {
@@ -251,7 +305,7 @@ struct DhPayloadHandler {
 impl EventHandler<PlayerCustomPayloadEvent> for DhPayloadHandler {
     fn handle<'a>(
         &'a self,
-        _server: &'a Arc<pumpkin::server::Server>,
+        server: &'a Arc<pumpkin::server::Server>,
         event: &'a PlayerCustomPayloadEvent,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
@@ -263,6 +317,43 @@ impl EventHandler<PlayerCustomPayloadEvent> for DhPayloadHandler {
             if let Some(messages) = self.state.process(&name, &event.data) {
                 for message in messages {
                     send(&player, &message).await;
+                }
+            }
+            if let Some((key, tracker, section)) = self.state.pending_generation(&name) {
+                let world = player.world();
+                let server = Arc::clone(server);
+                // Off-tick generation (ENF-2): the work runs on the blocking
+                // pool; this handler only awaits and never blocks the tick.
+                let state = Arc::clone(&self.state);
+                let generated = tokio::task::spawn_blocking(move || {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or_default();
+                    generator::generate_section(&server, &world, &section, now)
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    Err(generator::GenerationError::Unavailable(format!(
+                        "generation task failed: {e}"
+                    )))
+                });
+                match generated {
+                    Ok(lod) => {
+                        state.store_generated(&key, lod.clone());
+                        let messages = state.enqueue_and_pump(&name, tracker, lod);
+                        for message in messages {
+                            send(&player, &message).await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(target: "archidistantvoxy", "generation failed: {e}");
+                        send(
+                            &player,
+                            &message::reject(tracker, "generation failed", 2),
+                        )
+                        .await;
+                    }
                 }
             }
         })

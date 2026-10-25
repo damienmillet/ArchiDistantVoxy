@@ -9,6 +9,7 @@
 
 pub mod bytes;
 pub mod cache;
+pub mod capture;
 pub mod builder;
 pub mod message;
 pub mod throttle;
