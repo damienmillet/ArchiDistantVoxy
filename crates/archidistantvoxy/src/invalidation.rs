@@ -133,7 +133,11 @@ impl EventHandler<BlockBreakEvent> for BlockBreakHandler {
     }
 }
 
-/// Registers the invalidation handlers for the configured policy.
+/// Registers the invalidation handlers for the configured policy, spawning the
+/// periodic flush task when the policy is `Periodic`.
+///
+/// # Panics
+/// Panics only when a lock is poisoned; never in normal operation.
 pub(crate) fn register(
     state: &Arc<SharedState>,
     context: &Arc<pumpkin::plugin::api::context::Context>,
@@ -151,8 +155,19 @@ pub(crate) fn register(
         false,
     );
     context.register_event(
-        Arc::new(BlockBreakHandler { worker }),
+        Arc::new(BlockBreakHandler {
+            worker: Arc::clone(&worker),
+        }),
         EventPriority::Low,
         false,
     );
+    if policy == InvalidationPolicy::Periodic {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                worker.flush();
+            }
+        });
+    }
 }
