@@ -19,6 +19,9 @@ pub mod transfer;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 
+/// LSS (Voxy) wire protocol, phase 2.
+pub mod lss;
+
 /// Distant Horizons client release this implementation targets.
 pub const DH_VERSION: &str = "3.3.4";
 /// Network protocol used by the supported Distant Horizons release.

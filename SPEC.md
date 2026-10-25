@@ -172,7 +172,7 @@ flowchart TD
 | 1 | Own repo vs contribution to `filiphsps/pumpkin-plugins` | **Decided: own repo** — native generation is out of reach for their TS/WASM stack; their TS LodBuilder is used as a reference only |
 | 2 | Target Pumpkin version | Pin the latest stable release at project start (recorded in CI manifest and README) |
 | 3 | Target MC/DH protocol version | 26.x + DH 3.3.x (protocol 16) — to confirm against players' real clients |
-| 4 | Phase 2 (Voxy/LSS) | Backlog: included in the roadmap as M4, gated on the LSS license check |
+| 4 | Phase 2 (Voxy/LSS) | **Decided: included** — the LSS license gate resolved (MIT, © 2026 VoX); the v20 protocol is ported with credit, and the minimal scope (terrain download service) is implemented; per-chunk column serving from pumpkin-world remains follow-up work |
 | 5 | License | **Decided: GPL-3.0-or-later** (mandatory given the DH Support port) |
 | 6 | Distant generation model | **Decided: LOD-cache-only** — distant terrain regenerated deterministically from the seed; no full distant chunks persisted |
 

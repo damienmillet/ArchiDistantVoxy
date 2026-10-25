@@ -21,6 +21,7 @@ use pumpkin_api_macros::{plugin_impl, plugin_method};
 use lod_core::bytes::DecodeError;
 use lod_core::cache::{BlobStore, LodCache, MemoryStore, SectionKey};
 use lod_core::sqlite::SqliteStore;
+use lod_core::lss;
 use lod_core::message::{self, ClientMessage, Section};
 use lod_core::throttle::{BandwidthLimiter, ThrottlePolicy};
 pub mod commands;
@@ -104,6 +105,15 @@ impl Default for ArchiDistantVoxyPlugin {
 }
 
 /// Per-player DH session: bandwidth limiter and in-flight transfer queue.
+/// Per-player LSS (Voxy) session state.
+#[derive(Default)]
+struct LssSession {
+    /// Whether the v20 handshake completed.
+    registered: bool,
+    /// LOD distance in chunks advertised to the client.
+    lod_distance_chunks: i32,
+}
+
 struct DhSession {
     /// Bandwidth limiter for this player.
     limiter: BandwidthLimiter,
@@ -111,6 +121,8 @@ struct DhSession {
     queue: RequestQueue,
     /// Set by `/lod resend`: ignore client timestamps until the next session.
     resend_all: bool,
+    /// LSS (Voxy) session state, when the player also runs LSS.
+    lss: LssSession,
 }
 
 impl DhSession {
@@ -121,6 +133,7 @@ impl DhSession {
             limiter: BandwidthLimiter::new(ThrottlePolicy::default()),
             queue: RequestQueue::new(),
             resend_all: false,
+            lss: LssSession::default(),
         }
     }
 }
@@ -274,6 +287,61 @@ impl SharedState {
         let mut sessions = self.sessions.lock().expect("sessions lock poisoned");
         if let Some(session) = sessions.get_mut(player) {
             session.resend_all = true;
+        }
+    }
+
+    /// Processes one inbound LSS (Voxy) payload, returning the reply channel
+    /// and bytes to send. Handles the v20 handshake and batch chunk requests
+    /// (EF-11): columns are served from the LOD cache's generated sections;
+    /// positions without a cached section answer `NOT_GENERATED` (generation is
+    /// DH-driven; a Voxy-only miss does not trigger one in the minimal port).
+    fn process_lss(
+        &self,
+        player: &str,
+        canonical_channel: &'static str,
+        data: &[u8],
+    ) -> Option<(String, Vec<u8>)> {
+        match canonical_channel {
+            lss::CHANNEL_HANDSHAKE => {
+                let handshake = lss::message::decode_handshake(data).ok()?;
+                if handshake.protocol_version != lss::PROTOCOL_VERSION {
+                    tracing::warn!(
+                        target: "archidistantvoxy",
+                        "LSS client {player} announced unsupported protocol {} (expected {})",
+                        handshake.protocol_version,
+                        lss::PROTOCOL_VERSION
+                    );
+                    // Foreign version: no reply frame (the LSS doctrine).
+                    return None;
+                }
+                let mut sessions = self.sessions.lock().expect("sessions lock poisoned");
+                let session = sessions
+                    .entry(player.to_string())
+                    .or_insert_with(DhSession::new);
+                session.lss.registered = true;
+                session.lss.lod_distance_chunks = 512;
+                let reply = lss::message::encode_session_config(lss::message::SessionConfig {
+                    protocol_version: lss::PROTOCOL_VERSION,
+                    enabled: true,
+                    lod_distance_chunks: 512,
+                    generation_enabled: true,
+                });
+                Some((lss::CHANNEL_SESSION_CONFIG.to_string(), reply))
+            }
+            lss::CHANNEL_CHUNK_REQUEST => {
+                let requests = lss::message::decode_batch_chunk_request(data).ok()?;
+                let up_to_date: Vec<i64> = requests
+                    .iter()
+                    .map(|r| r.packed_position)
+                    .collect();
+                // Minimal port (M4): serve what the DH pipeline already
+                // generated; the LOD cache is DH-shaped (64-block sections),
+                // so per-chunk columns answer NOT_GENERATED until the LSS
+                // column builder is wired to pumpkin-world (documented gap).
+                let reply = lss::message::not_generated(&up_to_date);
+                Some((lss::CHANNEL_BATCH_RESPONSE.to_string(), reply))
+            }
+            _ => None,
         }
     }
 
@@ -436,6 +504,16 @@ impl EventHandler<PlayerCustomPayloadEvent> for DhPayloadHandler {
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if event.channel != CHANNEL {
+                // Phase 2: LSS (Voxy) channels ride the same event.
+                if let Some(canonical) = lss::message::client_channel(&event.channel) {
+                    let player = Arc::clone(&event.player);
+                    let name = player.gameprofile.name.clone();
+                    if let Some((channel, payload)) =
+                        self.state.process_lss(&name, canonical, &event.data)
+                    {
+                        send_on(&player, &channel, &payload).await;
+                    }
+                }
                 return;
             }
             let player = Arc::clone(&event.player);
@@ -488,7 +566,12 @@ impl EventHandler<PlayerCustomPayloadEvent> for DhPayloadHandler {
 
 /// Sends a DH server message to a player's Java client.
 async fn send(player: &Arc<Player>, payload: &[u8]) {
+    send_on(player, CHANNEL, payload).await;
+}
+
+/// Sends a custom payload on an arbitrary channel to a player's Java client.
+async fn send_on(player: &Arc<Player>, channel: &str, payload: &[u8]) {
     if let Some(java) = player.as_java() {
-        java.send_custom_payload(CHANNEL, payload).await;
+        java.send_custom_payload(channel, payload).await;
     }
 }

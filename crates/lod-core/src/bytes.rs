@@ -153,6 +153,37 @@ impl<'a> Reader<'a> {
         String::from_utf8(bytes.to_vec()).map_err(|_| DecodeError::InvalidValue("string"))
     }
 
+    /// Reads a netty-style signed `VarInt` (5 bytes max, LEB128).
+    ///
+    /// # Errors
+    /// Fails when truncated or longer than 5 bytes.
+    pub fn varint(&mut self) -> Result<i32, DecodeError> {
+        let mut value: u32 = 0;
+        let mut position = 0;
+        loop {
+            let byte = self.byte()?;
+            value |= u32::from(byte & 0x7F) << position;
+            if (byte & 0x80) == 0 {
+                return Ok(value as i32);
+            }
+            position += 7;
+            if position >= 32 {
+                return Err(DecodeError::InvalidValue("varint"));
+            }
+        }
+    }
+
+    /// Reads a big-endian 64-bit integer.
+    ///
+    /// # Errors
+    /// Fails when the payload is truncated.
+    pub fn i64(&mut self) -> Result<i64, DecodeError> {
+        let b = self.take(8)?;
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(b);
+        Ok(i64::from_be_bytes(bytes))
+    }
+
     /// Fails if the whole payload has not been consumed.
     ///
     /// # Errors
@@ -226,6 +257,38 @@ impl Writer {
     /// Appends a length-prefixed UTF-8 string.
     pub fn string(&mut self, value: &str) -> &mut Self {
         self.blob(value.as_bytes())
+    }
+
+    /// Appends a netty-style signed `VarInt` (5 bytes max, LEB128).
+    pub fn varint(&mut self, value: i32) -> &mut Self {
+        let mut v = value as u32;
+        loop {
+            if (v & !0x7F) == 0 {
+                self.byte(v as u8);
+                return self;
+            }
+            self.byte((v as u8 & 0x7F) | 0x80);
+            v >>= 7;
+        }
+    }
+
+    /// Appends a big-endian 64-bit integer.
+    pub fn i64(&mut self, value: i64) -> &mut Self {
+        self.data.extend_from_slice(&value.to_be_bytes());
+        self
+    }
+
+    /// Appends a length-prefixed UTF-8 string, truncated to `max_bytes` UTF-8
+    /// bytes like netty's `writeUtf` bound.
+    pub fn string_bounded(&mut self, value: &str, max_bytes: usize) -> &mut Self {
+        let mut end = value.len().min(max_bytes);
+        while end > 0 && !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        let bytes = &value.as_bytes()[..end];
+        self.int(bytes.len() as i32);
+        self.data.extend_from_slice(bytes);
+        self
     }
 
     /// Consumes the writer and returns the encoded bytes.
