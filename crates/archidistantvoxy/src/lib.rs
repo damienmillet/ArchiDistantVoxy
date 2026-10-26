@@ -15,6 +15,8 @@ use pumpkin::entity::player::Player;
 use pumpkin::plugin::api::context::Context;
 use pumpkin::plugin::api::events::player::player_custom_payload::PlayerCustomPayloadEvent;
 use pumpkin::plugin::api::events::EventPriority;
+use pumpkin_util::permission::{Permission, PermissionDefault};
+use pumpkin_util::PermissionLvl;
 use pumpkin::plugin::{BoxFuture, EventHandler};
 use pumpkin_api_macros::{plugin_impl, plugin_method};
 
@@ -43,6 +45,15 @@ impl ArchiDistantVoxyPlugin {
         let (config, warning) = config::Config::load(&config_path);
         if let Some(warning) = warning {
             tracing::warn!(target: "archidistantvoxy", "{warning}");
+        }
+        if let Err(e) = context.register_permission(Permission {
+            node: "archidistantvoxy:lod.admin".to_string(),
+            description: "Administer ArchiDistantVoxy LOD streaming (status, pregen, resend, purge-cache)"
+                .to_string(),
+            default: PermissionDefault::Op(PermissionLvl::Two),
+            children: HashMap::new(),
+        }) {
+            tracing::warn!(target: "archidistantvoxy", "cannot register lod.admin permission: {e}");
         }
         commands::register(&self.handler.state, &context);
         invalidation::register(
