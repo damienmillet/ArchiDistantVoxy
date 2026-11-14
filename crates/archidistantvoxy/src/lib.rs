@@ -428,8 +428,7 @@ impl SharedState {
                 tracing::info!(target: "archidistantvoxy", "DH session init for '{dimension}' from {player}");
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as u64)
-                    .unwrap_or_default();
+                    .map_or_default(|d| d.as_millis() as u64);
                 Some(vec![message::level_init(
                     &dimension,
                     "archidistantvoxy",
@@ -543,8 +542,7 @@ impl EventHandler<PlayerCustomPayloadEvent> for DhPayloadHandler {
                 let generated = tokio::task::spawn_blocking(move || {
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or_default();
+                        .map_or_default(|d| d.as_millis() as u64);
                     generator::generate_section(&server, &world, &section, now)
                 })
                 .await
