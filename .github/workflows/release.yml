@@ -3,7 +3,11 @@ name: Release artifacts
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -90,3 +94,28 @@ jobs:
           name: archidistantvoxy-macos-arm64
           path: artifacts/
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [build-linux, build-windows, build-linux-arm, build-macos-arm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          cp artifacts/archidistantvoxy-linux-x86_64/libarchidistantvoxy.so release-assets/archidistantvoxy-linux-x86_64.so
+          cp artifacts/archidistantvoxy-linux-arm64/libarchidistantvoxy.so release-assets/archidistantvoxy-linux-arm64.so
+          cp artifacts/archidistantvoxy-windows-x86_64/archidistantvoxy.dll release-assets/archidistantvoxy-windows-x86_64.dll
+          cp artifacts/archidistantvoxy-macos-arm64/libarchidistantvoxy.dylib release-assets/archidistantvoxy-macos-arm64.dylib
+      - name: Create the GitHub release with the binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            release-assets/*
